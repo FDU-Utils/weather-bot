@@ -35,7 +35,7 @@ jobs:
         id: msg
         shell: bash
         run: |
-          echo "subject=复旦天气 $(TZ=Asia/Shanghai date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+          echo "subject=復旦天氣 $(TZ=Asia/Shanghai date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           DELIM="GH_OUT_EOF_$(date +%s%N)"
           printf 'body<<%s\n' "$DELIM" >> "$GITHUB_OUTPUT"
           cat weather_output.txt >> "$GITHUB_OUTPUT"

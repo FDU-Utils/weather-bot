@@ -1,0 +1,32 @@
+# Build directories
+build/
+cmake-build-*/
+
+# CMake generated files (in-source builds)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CMakeOutput.log
+CMakeError.log
+CTestTestfile.cmake
+compile_commands.json
+
+# Generated Makefiles
+Makefile
+
+# Compiled binaries
+*.o
+*.a
+*.so
+*.d
+*.exe
+*.out
+weather/weather
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# Recipients are stored in a GitHub Secret, never committed
+emails.txt

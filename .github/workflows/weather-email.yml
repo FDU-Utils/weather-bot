@@ -1,0 +1,56 @@
+name: Daily weather email
+
+on:
+  schedule:
+    # 06:00 UTC+8 == 22:00 UTC
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send-weather-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libcurl4-openssl-dev
+
+      - name: Build weather
+        run: |
+          cmake -S . -B build
+          cmake --build build -j2
+
+      - name: Fetch weather
+        run: |
+          ./build/weather/weather > weather_output.txt 2>&1 || true
+          cat weather_output.txt
+
+      - name: Resolve subject and body
+        id: msg
+        shell: bash
+        run: |
+          echo "subject=复旦天气 $(TZ=Asia/Shanghai date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+          DELIM="GH_OUT_EOF_$(date +%s%N)"
+          printf 'body<<%s\n' "$DELIM" >> "$GITHUB_OUTPUT"
+          cat weather_output.txt >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$DELIM" >> "$GITHUB_OUTPUT"
+
+      - name: Send email
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          from: ${{ secrets.SMTP_USERNAME }}
+          to: ${{ secrets.EMAIL_RECIPIENTS }}
+          cc: ${{ secrets.EMAIL_CC }}
+          subject: ${{ steps.msg.outputs.subject }}
+          body: ${{ steps.msg.outputs.body }}
+          ignore_cert: false

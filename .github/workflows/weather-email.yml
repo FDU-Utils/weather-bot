@@ -2,8 +2,8 @@ name: Daily weather email
 
 on:
   schedule:
-    # 06:00 UTC+8 == 22:00 UTC
-    - cron: '0 22 * * *'
+    # 05:53 UTC+8 == 21:53 UTC (previous day)
+    - cron: '53 21 * * *'
   workflow_dispatch:
 
 permissions:

@@ -1,9 +1,10 @@
 name: Daily weather email
 
 on:
-  schedule:
-    # 05:53 UTC+8 == 21:53 UTC (previous day)
-    - cron: '53 21 * * *'
+  # scheduled run disabled until the mail provider is fixed
+  # schedule:
+  #   # 05:53 UTC+8 == 21:53 UTC (previous day)
+  #   - cron: '53 21 * * *'
   workflow_dispatch:
 
 permissions:

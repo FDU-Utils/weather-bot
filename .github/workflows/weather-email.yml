@@ -31,55 +31,57 @@ jobs:
           ./build/weather/weather > weather_output.txt 2>&1 || true
           cat weather_output.txt
 
-      - name: Diagnose SMTP (temporary)
-        continue-on-error: true
-        env:
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-        run: |
-          echo "== runner public IP =="
-          curl -s https://ipinfo.io/ | head -c 400; echo
-          echo "== smtp.163.com probes =="
-          python3 - <<'PY'
-          import smtplib, os
-          u = os.environ["SMTP_USERNAME"]
-          p = os.environ["SMTP_PASSWORD"]
-          for port, mode in [(465, "ssl"), (994, "ssl"), (587, "starttls"), (25, "plain")]:
-              try:
-                  if mode == "ssl":
-                      s = smtplib.SMTP_SSL("smtp.163.com", port, timeout=20)
-                  else:
-                      s = smtplib.SMTP("smtp.163.com", port, timeout=20)
-                      s.ehlo()
-                      if mode == "starttls":
-                          s.starttls(); s.ehlo()
-                  s.login(u, p)
-                  print("port %s %s: LOGIN OK" % (port, mode))
-                  s.quit()
-              except Exception as e:
-                  print("port %s %s: FAIL %s: %s" % (port, mode, type(e).__name__, e))
-          PY
-
-      - name: Resolve subject and body
+      - name: Resolve subject
         id: msg
         shell: bash
-        run: |
-          echo "subject=復旦天氣 $(TZ=Asia/Shanghai date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
-          DELIM="GH_OUT_EOF_$(date +%s%N)"
-          printf 'body<<%s\n' "$DELIM" >> "$GITHUB_OUTPUT"
-          cat weather_output.txt >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$DELIM" >> "$GITHUB_OUTPUT"
+        run: echo "subject=復旦天氣 $(TZ=Asia/Shanghai date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
 
       - name: Send email
-        uses: dawidd6/action-send-mail@v4
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          from: ${{ secrets.SMTP_USERNAME }}
-          to: ${{ secrets.EMAIL_RECIPIENTS }}
-          cc: ${{ secrets.EMAIL_CC }}
-          subject: ${{ steps.msg.outputs.subject }}
-          body: ${{ steps.msg.outputs.body }}
-          ignore_cert: false
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
+          EMAIL_CC: ${{ secrets.EMAIL_CC }}
+          SUBJECT: ${{ steps.msg.outputs.subject }}
+        run: |
+          python3 - <<'PY'
+          import os, smtplib, ssl
+          from email.message import EmailMessage
+          from email.utils import formatdate
+
+          def addrs(value):
+              return [a.strip() for a in value.replace(",", "\n").split("\n") if a.strip()]
+
+          host = os.environ["SMTP_SERVER"]
+          port = int(os.environ["SMTP_PORT"])
+          user = os.environ["SMTP_USERNAME"]
+          password = os.environ["SMTP_PASSWORD"]
+          to = addrs(os.environ["EMAIL_RECIPIENTS"])
+          cc = addrs(os.environ.get("EMAIL_CC", ""))
+          if not to:
+              raise SystemExit("no recipients")
+
+          msg = EmailMessage()
+          msg["From"] = user
+          msg["To"] = ", ".join(to)
+          if cc:
+              msg["Cc"] = ", ".join(cc)
+          msg["Subject"] = os.environ["SUBJECT"]
+          msg["Date"] = formatdate(localtime=True)
+          msg.set_content(open("weather_output.txt", encoding="utf-8").read())
+
+          ctx = ssl.create_default_context()
+          if port == 465:
+              s = smtplib.SMTP_SSL(host, port, context=ctx, timeout=30)
+          else:
+              s = smtplib.SMTP(host, port, timeout=30)
+              s.starttls(context=ctx)
+          try:
+              s.login(user, password)
+              s.send_message(msg)
+          finally:
+              s.quit()
+          print("Mail sent to", ", ".join(to + cc))
+          PY

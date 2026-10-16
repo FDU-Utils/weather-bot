@@ -31,6 +31,35 @@ jobs:
           ./build/weather/weather > weather_output.txt 2>&1 || true
           cat weather_output.txt
 
+      - name: Diagnose SMTP (temporary)
+        continue-on-error: true
+        env:
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: |
+          echo "== runner public IP =="
+          curl -s https://ipinfo.io/ | head -c 400; echo
+          echo "== smtp.163.com probes =="
+          python3 - <<'PY'
+          import smtplib, os
+          u = os.environ["SMTP_USERNAME"]
+          p = os.environ["SMTP_PASSWORD"]
+          for port, mode in [(465, "ssl"), (994, "ssl"), (587, "starttls"), (25, "plain")]:
+              try:
+                  if mode == "ssl":
+                      s = smtplib.SMTP_SSL("smtp.163.com", port, timeout=20)
+                  else:
+                      s = smtplib.SMTP("smtp.163.com", port, timeout=20)
+                      s.ehlo()
+                      if mode == "starttls":
+                          s.starttls(); s.ehlo()
+                  s.login(u, p)
+                  print("port %s %s: LOGIN OK" % (port, mode))
+                  s.quit()
+              except Exception as e:
+                  print("port %s %s: FAIL %s: %s" % (port, mode, type(e).__name__, e))
+          PY
+
       - name: Resolve subject and body
         id: msg
         shell: bash
